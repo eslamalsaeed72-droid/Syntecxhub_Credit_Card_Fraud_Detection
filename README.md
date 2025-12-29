@@ -129,11 +129,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 💬 Feel free to open issues or submit pull requests.
 ```
 
-```python
-import shap
-explainer = shap.TreeExplainer(xgb_model)
-shap_values = explainer.shap_values(X_test.sample(1000, random_state=42))  # Sample for speed
-shap.summary_plot(shap_values, X_test.sample(1000, random_state=42))
-```
+
 
 
