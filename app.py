@@ -7,47 +7,40 @@ import os
 st.set_page_config(
     page_title="Credit Card Fraud Detection",
     page_icon="🔒",
-    layout="centered"
+    layout="centered",
+    initial_sidebar_state="expanded"
 )
 
 st.title("🔒 Credit Card Fraud Detection System")
-st.markdown("""
-This app uses an XGBoost model trained on credit card transactions to detect fraud in real-time.
-""")
+st.markdown("Real-time fraud detection using XGBoost on credit card transactions.")
 
-# ------------------- Safe and Lazy Loading -------------------
+# --- Safe Model Loading ---
 model = None
 feature_names = None
 shap_available = False
 
-# Try to import and load everything safely
 try:
-    # Lazy import joblib
     import joblib
-    
-    model_path = os.path.join("models", "xgb_fraud_model.pkl")
-    features_path = os.path.join("models", "feature_names.pkl")
-    
+
+    model_path = "models/xgb_fraud_model.pkl"
+    features_path = "models/feature_names.pkl"
+
     if os.path.exists(model_path) and os.path.exists(features_path):
         model = joblib.load(model_path)
         feature_names = joblib.load(features_path)
-        st.success("✅ Model loaded successfully from /models folder!")
+        st.success("✅ Model loaded successfully!")
     else:
-        raise FileNotFoundError("Model files missing in /models")
-        
-except ImportError:
-    st.warning("⚠️ 'joblib' library not available – model cannot be loaded.")
-    st.info("The app is running in demo mode (predictions disabled until fixed).")
+        st.error("❌ Model files not found in 'models/' folder.")
 
-except FileNotFoundError:
-    st.warning("⚠️ Model files not found in 'models/' folder.")
-    st.info("Make sure 'models/xgb_fraud_model.pkl' and 'models/feature_names.pkl' are committed to GitHub.")
+except ImportError as e:
+    st.error("❌ Required library missing: joblib")
+    st.info("Add 'joblib' to requirements.txt and reboot the app.")
 
 except Exception as e:
-    st.warning("⚠️ Error loading model.")
-    st.code(str(e))
+    st.error("❌ Error loading model")
+    st.exception(e)
 
-# Try to import shap optionally
+# Try to import SHAP (optional)
 try:
     import shap
     import matplotlib.pyplot as plt
@@ -55,91 +48,125 @@ try:
 except ImportError:
     shap_available = False
 
-# If model loaded successfully, continue with full app
-if model is not None:
-    st.info("""
-    **Model Performance:**
-    - ROC-AUC: **0.9775**
-    - Recall @ 0.5: **86.7%**
-    """)
+# --- App runs only if model is loaded ---
+if model is None:
+    st.stop()
 
-    # Sidebar
-    st.sidebar.header("⚙️ Settings")
-    threshold = st.sidebar.slider("Decision Threshold", 0.1, 0.99, 0.50, 0.05)
+# Model info
+st.info("**Model Performance** — ROC-AUC: 0.9775 | Recall @ 0.5: 86.7% (85/98 frauds detected)")
 
-    if threshold <= 0.40:
-        mode = "🟢 High Sensitivity – Max fraud detection"
-    elif threshold >= 0.70:
-        mode = "🔵 Conservative – Min false alarms"
-    else:
-        mode = "🟡 Balanced – Recommended"
+# Sidebar - Threshold
+st.sidebar.header("⚙️ Detection Settings")
+threshold = st.sidebar.slider(
+    "Decision Threshold",
+    min_value=0.1,
+    max_value=0.99,
+    value=0.50,
+    step=0.05,
+    help="Lower → More sensitive | Higher → Fewer false alarms"
+)
 
-    st.sidebar.markdown(f"### Mode: {mode}")
+if threshold <= 0.4:
+    mode = "🟢 **High Sensitivity** – Maximize fraud detection"
+elif threshold >= 0.7:
+    mode = "🔵 **Conservative** – Minimize false alarms"
+else:
+    mode = "🟡 **Balanced** – Recommended"
 
-    # Input
-    st.header("🛠 Enter Transaction")
-    input_method = st.radio("Input method:", ("Manual Input", "CSV Upload"))
+st.sidebar.markdown(f"### Current Mode\n{mode}")
 
-    if input_method == "Manual Input":
-        input_data = {}
-        cols = st.columns(3)
-        with cols[0]:
-            input_data['Time'] = st.slider("Time", 0, 172792, 94813)
-        with cols[1]:
-            input_data['Amount'] = st.number_input("Amount", 0.0, value=88.35)
+# --- Input ---
+st.header("🛠 Enter Transaction Data")
+input_method = st.radio("Input method", ["Manual Input (Sliders)", "Upload CSV File"])
 
-        st.markdown("#### PCA Features (V1-V28)")
-        for i in range(0, 28, 4):
-            cols = st.columns(4)
-            for j in range(4):
-                if i + j < 28:
-                    feat = f'V{i+j+1}'
-                    input_data[feat] = cols[j].slider(feat, -10.0, 10.0, 0.0, 0.01)
+if input_method == "Manual Input (Sliders)":
+    st.caption("Adjust Time, Amount, and PCA features (V1-V28)")
 
-        input_df = pd.DataFrame([input_data])[feature_names]
+    data = {}
+    col1, col2 = st.columns(2)
+    with col1:
+        data["Time"] = st.number_input("Time (seconds)", 0, 172792, 94813)
+    with col2:
+        data["Amount"] = st.number_input("Amount ($)", 0.0, value=88.35, step=0.01)
 
-    else:
-        uploaded = st.file_uploader("Upload CSV", type="csv")
-        if uploaded:
-            input_df = pd.read_csv(uploaded)
-            input_df = input_df[feature_names]
-            st.dataframe(input_df)
-        else:
-            st.stop()
+    st.markdown("#### PCA Features (V1 to V28)")
+    for i in range(0, 28, 4):
+        cols = st.columns(4)
+        for j in range(4):
+            if i + j < 28:
+                feat = f"V{i+j+1}"
+                data[feat] = cols[j].slider(feat, -10.0, 10.0, 0.0, 0.01)
 
-    # Prediction
-    with st.spinner("Predicting..."):
-        probas = model.predict_proba(input_df)[:, 1]
-        predictions = (probas >= threshold).astype(int)
-
-    # Results
-    st.header("🔍 Results")
-    for i, (proba, pred) in enumerate(zip(probas, predictions)):
-        if len(input_df) > 1:
-            st.subheader(f"Transaction {i+1}")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Fraud Probability", f"{proba:.1%}")
-        with col2:
-            if pred == 1:
-                st.error("🚨 FRAUD DETECTED")
-            else:
-                st.success("✅ LEGITIMATE")
-
-    # Optional SHAP
-    if len(input_df) == 1 and shap_available and st.checkbox("Show SHAP Explanation"):
-        with st.spinner("Generating explanation..."):
-            explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(input_df)
-            fig, ax = plt.subplots()
-            shap.force_plot(explainer.expected_value, shap_values[0], input_df.iloc[0], matplotlib=True, show=False)
-            st.pyplot(fig)
+    input_df = pd.DataFrame([data])[feature_names]
 
 else:
-    st.info("🔧 App running in limited mode until model is loaded.")
-    st.markdown("### Fix steps:")
-    st.markdown("- Commit `models/` folder with both .pkl files to GitHub")
-    st.markdown("- Reboot the app in Streamlit Cloud")
+    uploaded = st.file_uploader("Upload CSV with transaction(s)", type="csv")
+    if uploaded:
+        try:
+            input_df = pd.read_csv(uploaded)
+            input_df = input_df[feature_names]
+            st.success(f"Loaded {len(input_df)} transaction(s)")
+            st.dataframe(input_df)
+        except Exception as e:
+            st.error("Error reading CSV. Check column names.")
+            st.stop()
+    else:
+        st.info("Waiting for CSV upload...")
+        st.stop()
 
+# --- Prediction ---
+with st.spinner("Analyzing transaction(s)..."):
+    probas = model.predict_proba(input_df)[:, 1]
+    predictions = (probas >= threshold).astype(int)
+
+# --- Results ---
+st.header("🔍 Prediction Results")
+
+for i in range(len(input_df)):
+    if len(input_df) > 1:
+        st.subheader(f"Transaction {i+1}")
+
+    col1, col2, col3 = st.columns(3)
+    proba = probas[i]
+    pred = predictions[i]
+
+    with col1:
+        st.metric("Fraud Probability", f"{proba:.1%}")
+
+    with col2:
+        if pred == 1:
+            st.error("🚨 FRAUD DETECTED")
+        else:
+            st.success("✅ LEGITIMATE")
+
+    with col3:
+        if pred == 1:
+            st.warning(f"Action: Block/Review (threshold: {threshold})")
+        else:
+            st.info(f"Action: Approve (threshold: {threshold})")
+
+    if len(input_df) > 1:
+        st.markdown("---")
+
+# --- Optional SHAP Explanation (single transaction only) ---
+if len(input_df) == 1 and shap_available and st.checkbox("Show SHAP Explanation (why this prediction?)"):
+    with st.spinner("Generating explanation..."):
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(input_df)
+
+        fig, ax = plt.subplots()
+        shap.force_plot(
+            explainer.expected_value,
+            shap_values[0],
+            input_df.iloc[0],
+            matplotlib=True,
+            show=False
+        )
+        st.pyplot(fig)
+        plt.close()
+
+        st.caption("Red → pushes toward fraud | Blue → pushes toward legitimate")
+
+# Footer
 st.markdown("---")
-st.caption("XGBoost Credit Card Fraud Detection | Deployed with Streamlit")
+st.caption("Built with XGBoost + Streamlit | Dataset: Kaggle Credit Card Fraud")
