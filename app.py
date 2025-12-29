@@ -14,8 +14,8 @@ st.set_page_config(
 # Load model and feature names
 @st.cache_resource
 def load_model():
-    model = joblib.load('xgb_fraud_model.pkl')
-    features = joblib.load('feature_names.pkl')
+    model = joblib.load('models/xgb_fraud_model.pkl')
+    features = joblib.load('models/feature_names.pkl')
     return model, features
 
 try:
