@@ -59,9 +59,10 @@ credit-card-fraud-detection/
 ├── models/
 │   ├── xgb_fraud_model.pkl    # Trained XGBoost model (best performer)
 │   └── feature_names.pkl      # Feature column order
-├── notebook/                  # (Optional) Full analysis notebook
-│   └── Credit_Card_Fraud_Detection.ipynb
+├──  Syntecxhub_Credit_Card_Fraud_Detection.ipynb
 └── README.md                  # Project documentation
+├── Demo/
+│   └── Screenshots to Project
 ```
 
 ## 🛠 Installation & Local Run
