@@ -10,7 +10,7 @@ A real-time **Credit Card Fraud Detection** system built using **XGBoost** and d
 
 This project demonstrates end-to-end machine learning workflow: data exploration, handling severe class imbalance, model training, performance evaluation, business-oriented threshold analysis, **model interpretability using SHAP**, and deployment.
 
-Live Demo: https://your-app-name.streamlit.app
+Live Demo: https://ndduhkjeaunhs3hfcvxsbd.streamlit.app/
 
 ## 🚀 Features
 
